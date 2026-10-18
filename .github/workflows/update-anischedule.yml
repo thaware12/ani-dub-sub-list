@@ -1,0 +1,41 @@
+name: Update AniSchedule Progress
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: anischedule-progress-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Update SUB/DUB progress
+        run: python scripts/update_anischedule.py
+
+      - name: Commit only when data changed
+        run: |
+          if git diff --quiet -- data/progress.json; then
+            echo "No progress changes."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/progress.json
+          git commit -m "data: update AniSchedule progress"
+          git push
