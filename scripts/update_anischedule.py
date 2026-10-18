@@ -8,14 +8,27 @@ from pathlib import Path
 PROGRESS_PATH = Path("data/progress.json")
 
 FEEDS = {
-    "sub": (
-        "https://raw.githubusercontent.com/"
-        "RockinChaos/AniSchedule/master/raw/sub-episode-feed.json"
-    ),
-    "dub": (
-        "https://raw.githubusercontent.com/"
-        "RockinChaos/AniSchedule/master/raw/dub-episode-feed.json"
-    ),
+    "sub": {
+        "url": (
+            "https://raw.githubusercontent.com/"
+            "RockinChaos/AniSchedule/master/raw/sub-episode-feed.json"
+        ),
+        "target": "sub",
+    },
+    "dub": {
+        "url": (
+            "https://raw.githubusercontent.com/"
+            "RockinChaos/AniSchedule/master/raw/dub-episode-feed.json"
+        ),
+        "target": "dub",
+    },
+    "hentai": {
+        "url": (
+            "https://raw.githubusercontent.com/"
+            "RockinChaos/AniSchedule/master/raw/hentai-episode-feed.json"
+        ),
+        "target": "sub",
+    },
 }
 
 
@@ -161,13 +174,16 @@ def main():
 
     skipped = 0
 
-    for language, url in FEEDS.items():
-        print(f"Fetching AniSchedule {language.upper()} feed...")
+        for feed_name, config in FEEDS.items():
+        url = config["url"]
+        target = config["target"]
+
+        print(f"Fetching AniSchedule {feed_name.upper()} feed...")
 
         feed = fetch_json(url)
-
-        print(
-            f"{language.upper()} feed contains "
+            
+                print(
+            f"{feed_name.upper()} feed contains "
             f"{len(feed)} episode entries."
         )
 
@@ -189,7 +205,7 @@ def main():
             if episode is None:
                 continue
 
-            feed_episodes[language][key].add(episode)
+                        feed_episodes[target][key].add(episode)
 
             if key not in feed_metadata:
                 feed_metadata[key] = {
