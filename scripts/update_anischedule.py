@@ -115,15 +115,6 @@ def resolve_anime(entry, records, mal_index):
     return None
 
 
-def candidate_count(episodes):
-    if not episodes:
-        return 0
-
-    # Store AniSchedule's highest released episode number.
-    # Do not count feed rows, because Episode 0 would make
-    # the value one higher than the normal episode numbering.
-    return max(episodes)
-
 
 def merge_progress(old_value, episodes):
     if not episodes:
@@ -245,7 +236,7 @@ def main():
         old_sub = int(record.get("sub") or 0)
         old_dub = int(record.get("dub") or 0)
 
-             # Critical safety rule:
+        # Critical safety rule:
         # AniSchedule can increase progress.
         # It can only decrease by 1 in the proven Episode 0 case.
         new_sub = merge_progress(
