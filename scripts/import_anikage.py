@@ -125,8 +125,9 @@ def main():
             break
 
         page += 1
-        time.sleep(0.15)
+        time.sleep(1.2)
 
+    
     ordered = {
         key: records[key]
         for key in sorted(records, key=lambda value: int(value))
