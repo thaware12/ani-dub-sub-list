@@ -245,26 +245,18 @@ def main():
         old_sub = int(record.get("sub") or 0)
         old_dub = int(record.get("dub") or 0)
 
-        schedule_sub = candidate_count(
-            feed_episodes["sub"].get(key, set())
+             # Critical safety rule:
+        # AniSchedule can increase progress.
+        # It can only decrease by 1 in the proven Episode 0 case.
+        new_sub = merge_progress(
+            old_sub,
+            feed_episodes["sub"].get(key, set()),
         )
 
-        schedule_dub = candidate_count(
-            feed_episodes["dub"].get(key, set())
+        new_dub = merge_progress(
+            old_dub,
+            feed_episodes["dub"].get(key, set()),
         )
-
-        # Critical safety rule:
-        # AniSchedule is allowed to increase our historical snapshot,
-        # NEVER decrease it.
-      new_sub = merge_progress(
-    old_sub,
-    feed_episodes["sub"].get(key, set()),
-)
-
-new_dub = merge_progress(
-    old_dub,
-    feed_episodes["dub"].get(key, set()),
-)
 
         record_changed = False
 
