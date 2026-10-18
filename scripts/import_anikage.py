@@ -1,3 +1,4 @@
+from urllib.error import HTTPError
 import json
 import time
 import urllib.parse
@@ -14,25 +15,37 @@ META_OUTPUT = Path("data/snapshot-meta.json")
 LIMIT = 100
 
 
-def fetch_page(page: int) -> dict:
-    params = urllib.parse.urlencode(
-        {
-            "page": page,
-            "limit": LIMIT,
-            "sort": "popularity",
-            "adult": "true",
-        }
-    )
+    for attempt in range(10):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                return json.load(response)
 
-    url = f"{API}?{params}"
+        except HTTPError as exc:
+            if exc.code == 429:
+                retry_after = exc.headers.get("Retry-After")
 
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "ani-dub-sub-list/1.0",
-            "Accept": "application/json",
-        },
-    )
+                if retry_after and retry_after.isdigit():
+                    wait = int(retry_after) + 2
+                else:
+                    wait = 65
+
+                print(f"Rate limited by AniKage. Waiting {wait}s...")
+                time.sleep(wait)
+                continue
+
+            raise
+
+        except Exception as exc:
+            if attempt == 9:
+                raise
+
+            wait = min(2 ** attempt, 30)
+
+            print(f"Request failed: {exc}")
+            print(f"Retrying in {wait}s...")
+            time.sleep(wait)
+
+    raise RuntimeError("Failed to fetch AniKage")
 
     for attempt in range(5):
         try:
