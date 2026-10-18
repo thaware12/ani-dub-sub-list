@@ -125,6 +125,29 @@ def candidate_count(episodes):
     return max(episodes)
 
 
+def merge_progress(old_value, episodes):
+    if not episodes:
+        return old_value
+
+    latest = max(episodes)
+
+    # Special correction for Episode 0.
+    #
+    # If AniSchedule explicitly contains the complete sequence
+    # 0, 1, 2, ... latest, and the old AniKage count is exactly
+    # one higher, AniKage probably counted Episode 0 as an
+    # additional episode.
+    #
+    # Our value represents latest numbered episode, so 0..12 = 12.
+    if 0 in episodes and old_value == latest + 1:
+        complete_sequence = set(range(0, latest + 1))
+
+        if complete_sequence.issubset(episodes):
+            return latest
+
+    return max(old_value, latest)
+
+
 def main():
     if not PROGRESS_PATH.exists():
         raise RuntimeError(
