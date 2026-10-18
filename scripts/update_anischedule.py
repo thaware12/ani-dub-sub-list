@@ -119,14 +119,10 @@ def candidate_count(episodes):
     if not episodes:
         return 0
 
-    highest_episode = max(episodes)
-
-    # Usually episode number == released episode count.
-    #
-    # Counting unique episode numbers also helps with Episode 0:
-    # episodes {0, 1, 2} = 3 released episodes even though the
-    # highest episode number is only 2.
-    return max(highest_episode, len(episodes))
+    # Store AniSchedule's highest released episode number.
+    # Do not count feed rows, because Episode 0 would make
+    # the value one higher than the normal episode numbering.
+    return max(episodes)
 
 
 def main():
