@@ -256,8 +256,15 @@ def main():
         # Critical safety rule:
         # AniSchedule is allowed to increase our historical snapshot,
         # NEVER decrease it.
-        new_sub = max(old_sub, schedule_sub)
-        new_dub = max(old_dub, schedule_dub)
+      new_sub = merge_progress(
+    old_sub,
+    feed_episodes["sub"].get(key, set()),
+)
+
+new_dub = merge_progress(
+    old_dub,
+    feed_episodes["dub"].get(key, set()),
+)
 
         record_changed = False
 
