@@ -1,11 +1,19 @@
 import json
 import time
 import urllib.request
+from datetime import datetime, timezone
 from collections import defaultdict
 from pathlib import Path
 
 
 PROGRESS_PATH = Path("data/progress.json")
+
+MANIFEST_URL = (
+    "https://raw.githubusercontent.com/"
+    "RockinChaos/AniSchedule/master/raw/last-updated.json"
+)
+
+MAX_STALE_DAYS = 5
 
 FEEDS = {
     "sub": {
@@ -56,6 +64,46 @@ def fetch_json(url: str):
             time.sleep(wait)
 
     raise RuntimeError(f"Failed to fetch {url}")
+
+def check_anischedule_freshness():
+    print("Checking AniSchedule feed freshness...")
+
+    manifest = fetch_json(MANIFEST_URL)
+
+    feeds = {
+        "SUB": manifest.get("subbed", {}).get("episodes"),
+        "DUB": manifest.get("dubbed", {}).get("episodes"),
+        "HENTAI": manifest.get("hentai", {}).get("episodes"),
+    }
+
+    now = datetime.now(timezone.utc)
+
+    for name, timestamp in feeds.items():
+        if not timestamp:
+            raise RuntimeError(
+                f"AniSchedule {name} feed has no last-updated timestamp."
+            )
+
+        updated_at = datetime.fromisoformat(
+            timestamp.replace("Z", "+00:00")
+        )
+
+        age = now - updated_at
+        age_days = age.total_seconds() / 86400
+
+        print(
+            f"{name} feed last updated "
+            f"{age_days:.2f} days ago."
+        )
+
+        if age_days > MAX_STALE_DAYS:
+            raise RuntimeError(
+                f"AniSchedule {name} feed is stale: "
+                f"{age_days:.2f} days old "
+                f"(limit: {MAX_STALE_DAYS} days)."
+            )
+
+    print("AniSchedule feeds are fresh.")
 
 
 def positive_int(value):
@@ -153,6 +201,8 @@ def merge_progress(old_value, episodes):
 
 
 def main():
+    check_anischedule_freshness()
+
     if not PROGRESS_PATH.exists():
         raise RuntimeError(
             "data/progress.json does not exist. "
