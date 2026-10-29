@@ -1,51 +1,113 @@
 name: Update AniSchedule Progress
 
 on:
-  workflow_dispatch:
+  # Safety-net hourly cron on an odd minute to restart the chain if it ever breaks.
+  # The actual 15-minute cadence is handled inside the job's sync loop.
   schedule:
-    - cron: "7,22,37,52 * * * *"
-
-permissions:
-  contents: write
-  actions: write
+    - cron: '17 * * * *'
+  workflow_dispatch:
 
 concurrency:
   group: anischedule-progress-update
   cancel-in-progress: false
 
+permissions:
+  contents: write
+  actions: write
+
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PYTHONUNBUFFERED: "1"
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Update SUB/DUB progress
-        run: python scripts/update_anischedule.py
-
-      - name: Commit only when data changed
+      - name: Sync loop (one pass every 15 minutes for ~50 minutes, then hands over)
+        shell: bash
         run: |
-          if git diff --quiet -- data/progress.json; then
-            echo "No progress changes."
-            exit 0
-          fi
-
+          set -u
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/progress.json
-          git commit -m "data: update AniSchedule progress"
-          git push
+          MAX_DURATION="${MAX_DURATION:-3000}"     # Run loop for ~50 mins (3000s), then hand over
+          SYNC_INTERVAL="${SYNC_INTERVAL:-900}"    # 15 minutes (900s) between SUB/DUB checks
+          SLEEP_OUTAGE="${SLEEP_OUTAGE:-120}"      # Back off 2 mins if API/network fails
 
-      - name: Wait 15 minutes and trigger next run
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Waiting 15 minutes before triggering the next run..."
-          sleep 900
-          gh workflow run "Update AniSchedule Progress" --ref main
+          # Dynamically detect this workflow file name
+          WORKFLOW_FILE="${GITHUB_WORKFLOW_REF#*/.github/workflows/}"
+          WORKFLOW_FILE="${WORKFLOW_FILE%%@*}"
+          START_TIME=$(date +%s)
+          QUEUED=false
+
+          queue_successor() {
+            if gh workflow run "$WORKFLOW_FILE" --ref "$GITHUB_REF_NAME"; then
+              QUEUED=true
+            else
+              echo "::warning::Could not queue the next run; the hourly cron will restart it."
+            fi
+          }
+
+          stage_files() {
+            if [ -e "data/progress.json" ]; then
+              git add -A -- data/progress.json
+            fi
+          }
+
+          push_changes() {
+            stage_files
+            if git diff --staged --quiet; then
+              echo "No progress changes."
+              return 0
+            fi
+            git commit -q -m "data: update AniSchedule progress"
+            for attempt in 1 2 3; do
+              git push -q origin HEAD:main && echo "Pushed updated progress.json." && return 0
+              echo "::warning::Push failed (attempt $attempt), rebasing onto origin/main"
+              git fetch -q origin main || true
+              git reset -q --mixed origin/main || true
+              stage_files
+              git diff --staged --quiet && return 0
+              git commit -q -m "data: update AniSchedule progress"
+            done
+            return 1
+          }
+
+          while true; do
+            PASS_START=$(date +%s)
+            rc=0
+            timeout 300 python scripts/update_anischedule.py || rc=$?
+
+            push_changes || echo "::warning::Could not push; will retry next cycle"
+
+            if [ "$rc" -eq 0 ]; then
+              PAUSE=$(( SYNC_INTERVAL - ( $(date +%s) - PASS_START ) ))
+              if [ "$PAUSE" -lt 5 ]; then PAUSE=5; fi
+              echo "Pass finished in $(( $(date +%s) - PASS_START ))s. Next pass in ${PAUSE}s."
+            else
+              echo "::warning::update_anischedule.py exited with code $rc - backing off ${SLEEP_OUTAGE}s"
+              PAUSE=$SLEEP_OUTAGE
+            fi
+
+            # Immediately queue the next run after the first pass so it waits in Pending
+            if [ "$QUEUED" = false ]; then queue_successor; fi
+
+            ELAPSED=$(( $(date +%s) - START_TIME ))
+            if [ $(( ELAPSED + PAUSE )) -ge "$MAX_DURATION" ]; then
+              echo "Loop time reached (${ELAPSED}s); handing over to the queued Pending run."
+              break
+            fi
+            sleep "$PAUSE"
+          done
