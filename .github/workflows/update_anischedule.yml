@@ -5,9 +5,9 @@ on:
   schedule:
     - cron: "7,22,37,52 * * * *"
 
-
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: anischedule-progress-update
@@ -40,3 +40,12 @@ jobs:
           git add data/progress.json
           git commit -m "data: update AniSchedule progress"
           git push
+
+      - name: Wait 15 minutes and trigger next run
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Waiting 15 minutes before triggering the next run..."
+          sleep 900
+          gh workflow run "Update AniSchedule Progress" --ref main
